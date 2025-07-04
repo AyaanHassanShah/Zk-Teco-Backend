@@ -21,25 +21,18 @@ app.get('/', (req, res) => {
         body {
           font-family: Arial, sans-serif;
           background: #f5f5f5;
-          padding: 10px;
-          margin: 0;
+          padding: 20px;
         }
         h1 {
           text-align: center;
           color: #333;
-          margin-bottom: 20px;
-        }
-        .container {
-          max-width: 1000px;
-          margin: auto;
-          overflow-x: auto;
         }
         table {
-          width: 100%;
+          margin: 0 auto;
           border-collapse: collapse;
+          width: 90%;
           background-color: #fff;
           box-shadow: 0 0 10px rgba(0,0,0,0.1);
-          min-width: 600px;
         }
         th, td {
           padding: 12px 16px;
@@ -47,14 +40,14 @@ app.get('/', (req, res) => {
           text-align: center;
         }
         th {
-          background-color: #red;
+          background-color: red;
           color: white;
         }
         tr:nth-child(even) {
           background-color: #f9f9f9;
         }
         #refresh {
-          margin: 10px auto 20px auto;
+          margin: 20px auto;
           display: block;
           padding: 10px 20px;
           background: #4CAF50;
@@ -62,34 +55,22 @@ app.get('/', (req, res) => {
           border: none;
           font-size: 16px;
           cursor: pointer;
-          border-radius: 4px;
-        }
-        @media (max-width: 600px) {
-          table {
-            font-size: 14px;
-            min-width: 100%;
-          }
-          th, td {
-            padding: 10px;
-          }
         }
       </style>
     </head>
     <body>
       <h1>ZKTeco Live Attendance Logs</h1>
-      <div class="container">
-        <table>
-          <thead>
-            <tr>
-              <th>User ID</th>
-              <th>Status</th>
-              <th>Time</th>
-              <th>Date</th>
-            </tr>
-          </thead>
-          <tbody id="logTable"></tbody>
-        </table>
-      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>User ID</th>
+            <th>Status</th>
+            <th>Time</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody id="logTable"></tbody>
+      </table>
 
       <script>
         async function fetchLogs() {
@@ -121,7 +102,7 @@ app.get('/api/logs', (req, res) => {
   res.json(logs);
 });
 
-// Push from ZKTeco device
+// Receive ZKTeco push data
 app.post('/iclock/cdata', (req, res) => {
   console.log('📥 RAW PUSH:', req.body);
 
@@ -132,7 +113,7 @@ app.post('/iclock/cdata', (req, res) => {
 
     if (parts.length >= 3) {
       const userId = parts[0];
-      const statusCode = parts[2]; // Adjusted to index 2
+      const statusCode = parts[2]; // ← using index 2 now!
 
       let status = 'Unknown';
       if (statusCode === '0') status = 'Check-In';
@@ -154,6 +135,7 @@ app.post('/iclock/cdata', (req, res) => {
   res.send('OK');
 });
 
+// Start server
 app.listen(PORT, () => {
   console.log(`✅ ZKTeco server running on port ${PORT}`);
 });
