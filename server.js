@@ -40,7 +40,7 @@ app.get('/', (req, res) => {
           text-align: center;
         }
         th {
-          background-color: #4CAF50;
+          background-color: red;
           color: white;
         }
         tr:nth-child(even) {
@@ -60,7 +60,6 @@ app.get('/', (req, res) => {
     </head>
     <body>
       <h1>ZKTeco Live Attendance Logs</h1>
-      <button id="refresh" onclick="fetchLogs()">🔄 Refresh Logs</button>
       <table>
         <thead>
           <tr>
