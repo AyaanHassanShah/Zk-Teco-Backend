@@ -40,7 +40,7 @@ app.get('/', (req, res) => {
           text-align: center;
         }
         th {
-          background-color: #4CAF50;
+          background-color: red;
           color: white;
         }
         tr:nth-child(even) {
