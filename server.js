@@ -7,40 +7,70 @@ let logs = [];
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
-// ✅ Biometric push route
+function parseData(raw) {
+  const parts = raw.split('\t');
+  const log = {};
+  for (let p of parts) {
+    const [key, val] = p.split('=');
+    if (key && val) log[key.trim()] = val.trim();
+  }
+  return {
+    userId: log['USER PIN'] || 'N/A',
+    status: log['STATUS'] === '0' ? 'Check-In' : log['STATUS'] === '1' ? 'Check-Out' : 'Unknown',
+    time: log['TIME'] ? new Date(log['TIME']).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+    date: log['TIME'] ? new Date(log['TIME']).toISOString().split('T')[0] : 'N/A'
+  };
+}
+
+// Device sends data here
 app.post('/iclock/cdata', (req, res) => {
   const timestamp = new Date().toLocaleString();
   logs.push({ raw: req.body, time: timestamp });
-  if (logs.length > 50) logs.shift(); // Keep last 50
+  if (logs.length > 50) logs.shift();
   console.log('📥 Biometric data received:', req.body);
   res.send('OK');
 });
 
-// ✅ Real-time dashboard route
+// Frontend dashboard
 app.get('/dashboard', (req, res) => {
   res.send(`
     <!DOCTYPE html>
     <html>
     <head>
-      <title>ZKTeco Live Dashboard</title>
+      <title>ZKTeco Attendance</title>
       <style>
-        body { font-family: sans-serif; padding: 20px; background: #f9f9f9; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #ccc; padding: 8px; }
-        th { background: #333; color: white; }
+        body { font-family: Arial, sans-serif; background: #f0f0f0; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
+        th, td { padding: 12px; border: 1px solid #ddd; text-align: center; }
+        th { background-color: #4CAF50; color: white; }
       </style>
     </head>
     <body>
-      <h2>🟢 Live Attendance Logs</h2>
-      <table><thead><tr><th>Time</th><th>Raw Data</th></tr></thead>
-      <tbody id="log-body"></tbody></table>
+      <h2>🟢 Real-Time Attendance Logs</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>User ID</th>
+            <th>Status</th>
+            <th>Time</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody id="log-body"></tbody>
+      </table>
+
       <script>
         async function loadLogs() {
           const res = await fetch('/api/logs');
           const data = await res.json();
           const tbody = document.getElementById('log-body');
-          tbody.innerHTML = data.map(log =>
-            \`<tr><td>\${log.time}</td><td>\${JSON.stringify(log.raw)}</td></tr>\`
+          tbody.innerHTML = data.map(log => 
+            \`<tr>
+              <td>\${log.userId}</td>
+              <td>\${log.status}</td>
+              <td>\${log.time}</td>
+              <td>\${log.date}</td>
+            </tr>\`
           ).join('');
         }
         setInterval(loadLogs, 3000);
@@ -51,12 +81,12 @@ app.get('/dashboard', (req, res) => {
   `);
 });
 
-// ✅ API route to get logs
+// Serve parsed logs
 app.get('/api/logs', (req, res) => {
-  res.json(logs);
+  const parsed = logs.map(log => parseData(log.raw));
+  res.json(parsed);
 });
 
-// ✅ Optional home page
 app.get('/', (req, res) => {
   res.send('✅ ZKTeco Attendance Server Running');
 });
