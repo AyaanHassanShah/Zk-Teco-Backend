@@ -1,52 +1,66 @@
 const express = require('express');
+const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-let logs = [];
+app.use(cors());
+app.use(express.text({ type: '*/*' }));
 
-app.use(express.urlencoded({ extended: false }));
-app.use(express.json());
+const logs = [];
 
-function parseData(raw) {
-  const parts = raw.split('\t');
-  const log = {};
-  for (let p of parts) {
-    const [key, val] = p.split('=');
-    if (key && val) log[key.trim()] = val.trim();
-  }
-  return {
-    userId: log['USER PIN'] || 'N/A',
-    status: log['STATUS'] === '0' ? 'Check-In' : log['STATUS'] === '1' ? 'Check-Out' : 'Unknown',
-    time: log['TIME'] ? new Date(log['TIME']).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
-    date: log['TIME'] ? new Date(log['TIME']).toISOString().split('T')[0] : 'N/A'
-  };
-}
-
-// Device sends data here
-app.post('/iclock/cdata', (req, res) => {
-  const timestamp = new Date().toLocaleString();
-  logs.push({ raw: req.body, time: timestamp });
-  if (logs.length > 50) logs.shift();
-  console.log('📥 Biometric data received:', req.body);
-  res.send('OK');
-});
-
-// Frontend dashboard
-app.get('/dashboard', (req, res) => {
+// ✅ Serve the HTML dashboard directly from the root route
+app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
-      <title>ZKTeco Attendance</title>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+      <title>ZKTeco Attendance Dashboard</title>
       <style>
-        body { font-family: Arial, sans-serif; background: #f0f0f0; padding: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
-        th, td { padding: 12px; border: 1px solid #ddd; text-align: center; }
-        th { background-color: #4CAF50; color: white; }
+        body {
+          font-family: Arial, sans-serif;
+          background: #f5f5f5;
+          padding: 20px;
+        }
+        h1 {
+          text-align: center;
+          color: #333;
+        }
+        table {
+          margin: 0 auto;
+          border-collapse: collapse;
+          width: 90%;
+          background-color: #fff;
+          box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        th, td {
+          padding: 12px 16px;
+          border: 1px solid #ddd;
+          text-align: center;
+        }
+        th {
+          background-color: #4CAF50;
+          color: white;
+        }
+        tr:nth-child(even) {
+          background-color: #f9f9f9;
+        }
+        #refresh {
+          margin: 20px auto;
+          display: block;
+          padding: 10px 20px;
+          background: #4CAF50;
+          color: white;
+          border: none;
+          font-size: 16px;
+          cursor: pointer;
+        }
       </style>
     </head>
     <body>
-      <h2>🟢 Real-Time Attendance Logs</h2>
+      <h1>ZKTeco Live Attendance Logs</h1>
+      <button id="refresh" onclick="fetchLogs()">🔄 Refresh Logs</button>
       <table>
         <thead>
           <tr>
@@ -56,41 +70,69 @@ app.get('/dashboard', (req, res) => {
             <th>Date</th>
           </tr>
         </thead>
-        <tbody id="log-body"></tbody>
+        <tbody id="logTable">
+          <!-- Logs will be loaded here -->
+        </tbody>
       </table>
 
       <script>
-        async function loadLogs() {
+        async function fetchLogs() {
           const res = await fetch('/api/logs');
           const data = await res.json();
-          const tbody = document.getElementById('log-body');
-          tbody.innerHTML = data.map(log => 
-            \`<tr>
+          const table = document.getElementById('logTable');
+          table.innerHTML = '';
+
+          data.slice().reverse().forEach(log => {
+            const row = document.createElement('tr');
+            row.innerHTML = \`
               <td>\${log.userId}</td>
               <td>\${log.status}</td>
               <td>\${log.time}</td>
               <td>\${log.date}</td>
-            </tr>\`
-          ).join('');
+            \`;
+            table.appendChild(row);
+          });
         }
-        setInterval(loadLogs, 3000);
-        loadLogs();
+
+        // Auto-refresh every 10 seconds
+        setInterval(fetchLogs, 10000);
+        fetchLogs(); // Initial load
       </script>
     </body>
     </html>
   `);
 });
 
-// Serve parsed logs
+// API route to return logs
 app.get('/api/logs', (req, res) => {
-  const parsed = logs.map(log => parseData(log.raw));
-  res.json(parsed);
+  res.json(logs);
 });
 
-app.get('/', (req, res) => {
-  res.send('✅ ZKTeco Attendance Server Running');
+// Push endpoint for ZKTeco device
+app.post('/iclock/cdata', (req, res) => {
+  console.log('📥 RAW PUSH:', req.body);
+
+  const userId = extractValue(req.body, 'PIN');
+  const statusCode = extractValue(req.body, 'STATUS');
+  const status = statusCode === '0' ? 'Check-In' : 'Check-Out';
+
+  logs.push({
+    userId,
+    status,
+    time: new Date().toLocaleTimeString(),
+    date: new Date().toLocaleDateString(),
+  });
+
+  if (logs.length > 50) logs.shift();
+  res.send('OK');
 });
+
+function extractValue(body, key) {
+  const regex = new RegExp(`${key}=([^\t\r\n]*)`);
+  const match = body.match(regex);
+  return match ? match[1] : 'UNKNOWN';
+}
 
 app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`✅ ZKTeco server running on port ${PORT}`);
 });
