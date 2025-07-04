@@ -8,7 +8,7 @@ app.use(express.text({ type: '*/*' }));
 
 const logs = [];
 
-// ✅ Serve the HTML dashboard directly from the root route
+// ✅ Serve the HTML dashboard
 app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -70,9 +70,7 @@ app.get('/', (req, res) => {
             <th>Date</th>
           </tr>
         </thead>
-        <tbody id="logTable">
-          <!-- Logs will be loaded here -->
-        </tbody>
+        <tbody id="logTable"></tbody>
       </table>
 
       <script>
@@ -81,7 +79,6 @@ app.get('/', (req, res) => {
           const data = await res.json();
           const table = document.getElementById('logTable');
           table.innerHTML = '';
-
           data.slice().reverse().forEach(log => {
             const row = document.createElement('tr');
             row.innerHTML = \`
@@ -93,45 +90,50 @@ app.get('/', (req, res) => {
             table.appendChild(row);
           });
         }
-
-        // Auto-refresh every 10 seconds
         setInterval(fetchLogs, 10000);
-        fetchLogs(); // Initial load
+        fetchLogs();
       </script>
     </body>
     </html>
   `);
 });
 
-// API route to return logs
+// ✅ API endpoint to return logs
 app.get('/api/logs', (req, res) => {
   res.json(logs);
 });
 
-// Push endpoint for ZKTeco device
+// ✅ Receive push data from ZKTeco device
 app.post('/iclock/cdata', (req, res) => {
   console.log('📥 RAW PUSH:', req.body);
 
-  const userId = extractValue(req.body, 'PIN');
-  const statusCode = extractValue(req.body, 'STATUS');
-  const status = statusCode === '0' ? 'Check-In' : 'Check-Out';
+  const lines = req.body.trim().split('\n');
 
-  logs.push({
-    userId,
-    status,
-    time: new Date().toLocaleTimeString(),
-    date: new Date().toLocaleDateString(),
-  });
+  for (const line of lines) {
+    const parts = line.trim().split('\t');
 
-  if (logs.length > 50) logs.shift();
+    // Expected format: USERID \t TIMESTAMP \t ? \t STATUS \t ...
+    if (parts.length >= 4) {
+      const userId = parts[0];
+      const statusCode = parts[3];
+
+      let status = 'Unknown';
+      if (statusCode === '0') status = 'Check-In';
+      else if (statusCode === '1') status = 'Check-Out';
+
+      const now = new Date();
+      const time = now.toLocaleTimeString('en-PK', { timeZone: 'Asia/Karachi' });
+      const date = now.toLocaleDateString('en-PK', { timeZone: 'Asia/Karachi' });
+
+      logs.push({ userId, status, time, date });
+      if (logs.length > 50) logs.shift();
+
+      console.log('✅ Parsed:', { userId, status });
+    }
+  }
+
   res.send('OK');
 });
-
-function extractValue(body, key) {
-  const regex = new RegExp(`${key}=([^\t\r\n]*)`);
-  const match = body.match(regex);
-  return match ? match[1] : 'UNKNOWN';
-}
 
 app.listen(PORT, () => {
   console.log(`✅ ZKTeco server running on port ${PORT}`);
