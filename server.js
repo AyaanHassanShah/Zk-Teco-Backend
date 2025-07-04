@@ -60,7 +60,6 @@ app.get('/', (req, res) => {
     </head>
     <body>
       <h1>ZKTeco Live Attendance Logs</h1>
-      <button id="refresh" onclick="fetchLogs()">🔄 Refresh Logs</button>
       <table>
         <thead>
           <tr>
