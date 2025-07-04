@@ -8,7 +8,7 @@ app.use(express.text({ type: '*/*' }));
 
 const logs = [];
 
-// ✅ Serve the HTML dashboard
+// Serve the HTML dashboard
 app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -40,7 +40,7 @@ app.get('/', (req, res) => {
           text-align: center;
         }
         th {
-          background-color: red;
+          background-color: #4CAF50;
           color: white;
         }
         tr:nth-child(even) {
@@ -60,6 +60,7 @@ app.get('/', (req, res) => {
     </head>
     <body>
       <h1>ZKTeco Live Attendance Logs</h1>
+      <button id="refresh" onclick="fetchLogs()">🔄 Refresh Logs</button>
       <table>
         <thead>
           <tr>
@@ -97,12 +98,12 @@ app.get('/', (req, res) => {
   `);
 });
 
-// ✅ API endpoint to return logs
+// Return logs
 app.get('/api/logs', (req, res) => {
   res.json(logs);
 });
 
-// ✅ Receive push data from ZKTeco device
+// Receive ZKTeco push data
 app.post('/iclock/cdata', (req, res) => {
   console.log('📥 RAW PUSH:', req.body);
 
@@ -111,10 +112,9 @@ app.post('/iclock/cdata', (req, res) => {
   for (const line of lines) {
     const parts = line.trim().split('\t');
 
-    // Expected format: USERID \t TIMESTAMP \t ? \t STATUS \t ...
-    if (parts.length >= 4) {
+    if (parts.length >= 3) {
       const userId = parts[0];
-      const statusCode = parts[3];
+      const statusCode = parts[2]; // ← using index 2 now!
 
       let status = 'Unknown';
       if (statusCode === '0') status = 'Check-In';
@@ -128,12 +128,15 @@ app.post('/iclock/cdata', (req, res) => {
       if (logs.length > 50) logs.shift();
 
       console.log('✅ Parsed:', { userId, status });
+    } else {
+      console.warn('⚠️ Unexpected format:', line);
     }
   }
 
   res.send('OK');
 });
 
+// Start server
 app.listen(PORT, () => {
   console.log(`✅ ZKTeco server running on port ${PORT}`);
 });
