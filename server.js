@@ -8,7 +8,6 @@ app.use(express.text({ type: '*/*' }));
 
 const logs = [];
 
-// Serve the HTML dashboard
 app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -116,12 +115,10 @@ app.get('/', (req, res) => {
   `);
 });
 
-// Return attendance logs
 app.get('/api/logs', (req, res) => {
   res.json(logs);
 });
 
-// Receive ZKTeco device push
 app.post('/iclock/cdata', (req, res) => {
   console.log('📥 RAW PUSH:', req.body);
 
@@ -130,7 +127,6 @@ app.post('/iclock/cdata', (req, res) => {
   for (const line of lines) {
     const parts = line.trim().split('\t');
 
-    // ⏭️ Skip OPLOG or system logs
     if (parts[0].toUpperCase().startsWith('OPLOG')) {
       console.log('⏭️ Skipping system log:', line);
       continue;
@@ -141,30 +137,30 @@ app.post('/iclock/cdata', (req, res) => {
       const statusCode = parts[2];
 
       const now = new Date();
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
+
+      // Convert to Asia/Karachi time
+      const timeStr = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Karachi',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      }).format(now);
+
+      const [hourStr, minuteStr] = timeStr.split(':');
+      const currentHour = parseInt(hourStr, 10);
+      const currentMinute = parseInt(minuteStr, 10);
       const currentTimeMinutes = currentHour * 60 + currentMinute;
 
-      // Set time thresholds (adjustable)
-      const checkInThreshold = 9 * 60;     // 09:00 AM
-      const checkOutThreshold = 10 * 60;   // 05:00 PM
+      // Define time thresholds
+      const checkInThreshold = 9 * 60;  // 9:00 AM
+      const checkOutThreshold = 13 * 60; // 1:00 PM
 
       let status = 'Unknown';
 
       if (statusCode === '0') {
-        // Check-In
-        if (currentTimeMinutes > checkInThreshold) {
-          status = 'Check-In (Short)';
-        } else {
-          status = 'Check-In';
-        }
+        status = currentTimeMinutes > checkInThreshold ? 'Check-In (Short)' : 'Check-In';
       } else if (statusCode === '1') {
-        // Check-Out
-        if (currentTimeMinutes < checkOutThreshold) {
-          status = 'Check-Out (Short)';
-        } else {
-          status = 'Check-Out';
-        }
+        status = currentTimeMinutes < checkOutThreshold ? 'Check-Out (Early)' : 'Check-Out';
       }
 
       const time = now.toLocaleTimeString('en-PK', { timeZone: 'Asia/Karachi' });
@@ -173,7 +169,7 @@ app.post('/iclock/cdata', (req, res) => {
       logs.push({ userId, status, time, date });
       if (logs.length > 50) logs.shift();
 
-      console.log('✅ Parsed:', { userId, status });
+      console.log('✅ Parsed:', { userId, status, currentHour, currentMinute });
     } else {
       console.warn('⚠️ Unexpected format:', line);
     }
@@ -182,7 +178,6 @@ app.post('/iclock/cdata', (req, res) => {
   res.send('OK');
 });
 
-// Start server
 app.listen(PORT, () => {
   console.log(`✅ ZKTeco server running on port ${PORT}`);
 });
