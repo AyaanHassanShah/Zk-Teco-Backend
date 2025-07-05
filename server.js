@@ -152,7 +152,7 @@ app.post('/iclock/cdata', (req, res) => {
       const currentTimeMinutes = currentHour * 60 + currentMinute;
 
       // Define time thresholds
-      const checkInThreshold = 15 * 60;  // 9:00 AM
+      const checkInThreshold = 9 * 60;  // 9:00 AM
       const checkOutThreshold = 17 * 60; // 1:00 PM
 
       let status = 'Unknown';
@@ -160,7 +160,7 @@ app.post('/iclock/cdata', (req, res) => {
       if (statusCode === '0') {
         status = currentTimeMinutes > checkInThreshold ? 'Check-In (Short)' : 'Check-In';
       } else if (statusCode === '1') {
-        status = currentTimeMinutes < checkOutThreshold ? 'Check-Out (Early)' : 'Check-Out';
+        status = currentTimeMinutes < checkOutThreshold ? 'Check-Out (Short)' : 'Check-Out';
       }
 
       const time = now.toLocaleTimeString('en-PK', { timeZone: 'Asia/Karachi' });
