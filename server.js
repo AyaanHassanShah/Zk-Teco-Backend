@@ -138,13 +138,35 @@ app.post('/iclock/cdata', (req, res) => {
 
     if (parts.length >= 3) {
       const userId = parts[0];
-      const statusCode = parts[2]; // Adjusted index for status
-
-      let status = 'Unknown';
-      if (statusCode === '0') status = 'Check-In';
-      else if (statusCode === '1') status = 'Check-Out';
+      const statusCode = parts[2];
 
       const now = new Date();
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      const currentTimeMinutes = currentHour * 60 + currentMinute;
+
+      // Set time thresholds (adjustable)
+      const checkInThreshold = 9 * 60;     // 09:00 AM
+      const checkOutThreshold = 17 * 60;   // 05:00 PM
+
+      let status = 'Unknown';
+
+      if (statusCode === '0') {
+        // Check-In
+        if (currentTimeMinutes > checkInThreshold) {
+          status = 'Check-In (Short)';
+        } else {
+          status = 'Check-In';
+        }
+      } else if (statusCode === '1') {
+        // Check-Out
+        if (currentTimeMinutes < checkOutThreshold) {
+          status = 'Check-Out (Early)';
+        } else {
+          status = 'Check-Out';
+        }
+      }
+
       const time = now.toLocaleTimeString('en-PK', { timeZone: 'Asia/Karachi' });
       const date = now.toLocaleDateString('en-PK', { timeZone: 'Asia/Karachi' });
 
