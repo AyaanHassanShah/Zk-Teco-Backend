@@ -146,7 +146,7 @@ app.post('/iclock/cdata', (req, res) => {
       const currentTimeMinutes = currentHour * 60 + currentMinute;
 
       // Set time thresholds (adjustable)
-      const checkInThreshold = 9 * 60;     // 09:00 AM
+      const checkInThreshold = 15 * 60;     // 09:00 AM
       const checkOutThreshold = 17 * 60;   // 05:00 PM
 
       let status = 'Unknown';
