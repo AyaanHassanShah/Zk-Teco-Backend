@@ -146,7 +146,7 @@ app.post('/iclock/cdata', (req, res) => {
       const currentTimeMinutes = currentHour * 60 + currentMinute;
 
       // Set time thresholds (adjustable)
-      const checkInThreshold = 9 * 60;     // 09:00 AM
+      const checkInThreshold = 14 * 60;     // 09:00 AM
       const checkOutThreshold = 17 * 60;   // 05:00 PM
 
       let status = 'Unknown';
@@ -161,7 +161,7 @@ app.post('/iclock/cdata', (req, res) => {
       } else if (statusCode === '1') {
         // Check-Out
         if (currentTimeMinutes < checkOutThreshold) {
-          status = 'Check-Out (Early)';
+          status = 'Check-Out (Short)';
         } else {
           status = 'Check-Out';
         }
