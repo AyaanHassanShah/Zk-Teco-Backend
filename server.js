@@ -1,34 +1,13 @@
 const express = require('express');
 const cors = require('cors');
-const mongoose = require('mongoose');
-
 const app = express();
 const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI; // Defined in Railway variables
 
-// Middleware
 app.use(cors());
 app.use(express.text({ type: '*/*' }));
 
-// MongoDB connection
-mongoose.connect(MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log('✅ Connected to MongoDB Atlas'))
-.catch((err) => console.error('❌ MongoDB connection error:', err));
+const logs = [];
 
-// Schema
-const logSchema = new mongoose.Schema({
-  userId: String,
-  status: String,
-  time: String,
-  date: String,
-});
-
-const Log = mongoose.model('Log', logSchema);
-
-// Dashboard HTML
 app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -41,34 +20,40 @@ app.get('/', (req, res) => {
         body {
           font-family: Arial, sans-serif;
           background: #f5f5f5;
-          padding: 20px;
+          padding: 10px;
           margin: 0;
         }
         h1 {
           text-align: center;
           color: #333;
+          margin-bottom: 20px;
+        }
+        .container {
+          max-width: 1000px;
+          margin: auto;
+          overflow-x: auto;
         }
         table {
-          margin: 0 auto;
+          width: 100%;
           border-collapse: collapse;
-          width: 95%;
           background-color: #fff;
           box-shadow: 0 0 10px rgba(0,0,0,0.1);
+          min-width: 600px;
         }
         th, td {
-          padding: 12px;
+          padding: 12px 16px;
           border: 1px solid #ddd;
           text-align: center;
         }
         th {
-          background-color: #4CAF50;
+          background-color: red;
           color: white;
         }
         tr:nth-child(even) {
           background-color: #f9f9f9;
         }
         #refresh {
-          margin: 20px auto;
+          margin: 10px auto 20px auto;
           display: block;
           padding: 10px 20px;
           background: #4CAF50;
@@ -76,24 +61,34 @@ app.get('/', (req, res) => {
           border: none;
           font-size: 16px;
           cursor: pointer;
+          border-radius: 4px;
+        }
+        @media (max-width: 600px) {
+          table {
+            font-size: 14px;
+            min-width: 100%;
+          }
+          th, td {
+            padding: 10px;
+          }
         }
       </style>
     </head>
     <body>
       <h1>ZKTeco Live Attendance Logs</h1>
-      <button id="refresh" onclick="fetchLogs()">🔄 Refresh Logs</button>
-      <table>
-        <thead>
-          <tr>
-            <th>User ID</th>
-            <th>Status</th>
-            <th>Time</th>
-            <th>Date</th>
-          </tr>
-        </thead>
-        <tbody id="logTable">
-        </tbody>
-      </table>
+      <div class="container">
+        <table>
+          <thead>
+            <tr>
+              <th>User ID</th>
+              <th>Status</th>
+              <th>Time</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody id="logTable"></tbody>
+        </table>
+      </div>
 
       <script>
         async function fetchLogs() {
@@ -101,7 +96,7 @@ app.get('/', (req, res) => {
           const data = await res.json();
           const table = document.getElementById('logTable');
           table.innerHTML = '';
-          data.reverse().forEach(log => {
+          data.slice().reverse().forEach(log => {
             const row = document.createElement('tr');
             row.innerHTML = \`
               <td>\${log.userId}</td>
@@ -112,7 +107,6 @@ app.get('/', (req, res) => {
             table.appendChild(row);
           });
         }
-
         setInterval(fetchLogs, 10000);
         fetchLogs();
       </script>
@@ -121,45 +115,69 @@ app.get('/', (req, res) => {
   `);
 });
 
-// Logs API
-app.get('/api/logs', async (req, res) => {
-  try {
-    const logs = await Log.find().sort({ _id: -1 }).limit(50);
-    res.json(logs);
-  } catch (err) {
-    res.status(500).send('Server error');
-  }
+app.get('/api/logs', (req, res) => {
+  res.json(logs);
 });
 
-// Handle push from ZKTeco device
-app.post('/iclock/cdata', async (req, res) => {
+app.post('/iclock/cdata', (req, res) => {
   console.log('📥 RAW PUSH:', req.body);
 
-  const userId = extractValue(req.body, 'PIN');
-  const statusCode = extractValue(req.body, 'STATUS');
-  const status = statusCode === '0' ? 'Check-In' : 'Check-Out';
+  const lines = req.body.trim().split('\n');
 
-  try {
-    await Log.create({
-      userId,
-      status,
-      time: new Date().toLocaleTimeString(),
-      date: new Date().toLocaleDateString(),
-    });
-  } catch (err) {
-    console.error('❌ Failed to save log:', err);
+  for (const line of lines) {
+    const parts = line.trim().split('\t');
+
+    if (parts[0].toUpperCase().startsWith('OPLOG')) {
+      console.log('⏭️ Skipping system log:', line);
+      continue;
+    }
+
+    if (parts.length >= 3) {
+      const userId = parts[0];
+      const statusCode = parts[2];
+
+      const now = new Date();
+
+      // Convert to Asia/Karachi time
+      const timeStr = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Karachi',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      }).format(now);
+
+      const [hourStr, minuteStr] = timeStr.split(':');
+      const currentHour = parseInt(hourStr, 10);
+      const currentMinute = parseInt(minuteStr, 10);
+      const currentTimeMinutes = currentHour * 60 + currentMinute;
+
+      // Define time thresholds
+      const checkInThreshold = 9 * 60;  // 9:00 AM
+      const checkOutThreshold = 17 * 60; // 1:00 PM
+
+      let status = 'Unknown';
+
+      if (statusCode === '0') {
+        status = currentTimeMinutes > checkInThreshold ? 'Check-In (Short)' : 'Check-In';
+      } else if (statusCode === '1') {
+        status = currentTimeMinutes < checkOutThreshold ? 'Check-Out (Short)' : 'Check-Out';
+      }
+
+      const time = now.toLocaleTimeString('en-PK', { timeZone: 'Asia/Karachi' });
+      const date = now.toLocaleDateString('en-PK', { timeZone: 'Asia/Karachi' });
+
+      logs.push({ userId, status, time, date });
+      if (logs.length > 50) logs.shift();
+
+      console.log('✅ Parsed:', { userId, status, currentHour, currentMinute });
+    } else {
+      console.warn('⚠️ Unexpected format:', line);
+    }
   }
 
   res.send('OK');
 });
 
-// Helper to extract value from raw text
-function extractValue(body, key) {
-  const regex = new RegExp(`${key}=([^\t\r\n]*)`);
-  const match = body.match(regex);
-  return match ? match[1] : 'UNKNOWN';
-}
-
 app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`✅ ZKTeco server running on port ${PORT}`);
 });
